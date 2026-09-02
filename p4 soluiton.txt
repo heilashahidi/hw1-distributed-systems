@@ -1,0 +1,71 @@
+---------------------------------------------(a)------------------------------------------------------------
+For this solution we only need to look at are queue and see if Pi is in the first K(amount that can be in the critical section) at once
+
+
+this implementation assume
+--FIFO
+--that q is a ordered list that sorts from lowest to highest ts
+
+---------Pi----------------
+var
+	n: int;
+	max_locks: int;
+	q: list of Req;
+	numAcks: int, initially 0;
+
+Upon receive REQUEST (ts) from Pj
+ 	q.insert(new Req(ts, j));
+ 	send ACK (logicalClock()) to Pj;
+
+Upon receive ACK (ts) from Pj
+	numAcks := numAcks + 1;
+	if (numAcks = n − 1) ∧ in_smallest(i) then enterCriticalSection();
+
+Upon receive RELEASE from Pj
+ 	if ∃r ∈ q : r.pid = j then q.remove(r);
+	if (numAcks = n − 1) ∧ in_smallest(i) then enterCriticalSection();
+
+function in_smallest(i)
+	
+	for(int index = 0; index < max_locks; index++)
+		if(¬q.isEmpty () ∧ (q[index].pid = i)) then return true;
+	return false
+
+procedure requestCS(i)
+	int ts := logicalClock();
+	forall j ∈ [1..n] : if j != i then send REQUEST (ts) to Pj;
+	q.insert(new Req(ts, i));
+	numAcks := 0;
+
+procedure releaseCS(i)
+	if ∃r ∈ q : r .pid = i then q.remove(r );
+	forall j ∈ [1..n] : if j != i then send RELEASE () to Pj;
+
+---------------------------------------------(b)------------------------------------------------------------
+For this solution we only need to look at the number of okays that we have gotten and see if we get numOkay - K(amount that can be in the critical section) at once. We can enter because the remaining okay could be in the critical section or just delayed. We know for a fact that there will be K or less in the critical section.
+
+-------------Pi----------------
+var
+	n: int;
+	pendingQ: list of int;
+	myts: int, initially ∞;
+	numOkay : int, initially 0;
+	max_locks: int;
+
+Upon receive REQUEST (jts) from Pj
+	if (jts < myts) ∨ ((jts = myts) ∧ (j < i)) then send OKAY () to Pj ;
+	else pendingQ.add(j);
+
+Upon receive OKAY from Pj
+	numOkay := numOkay + 1;
+	if numOkay = n − max_locks then enterCriticalSection();
+
+procedure requestCS(i)
+	myts := logicalClock();
+	forall j ∈ [1..n] : if j 6 = i then send REQUEST (myts) to Pj ;
+	numOkay := 0;
+
+procedure releaseCS(i)
+	myts := ∞;
+	forall j ∈ pendingQ : send OKAY () to Pj ;
+	pendingQ.clear ();

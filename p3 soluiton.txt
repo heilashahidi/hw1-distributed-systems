@@ -1,0 +1,59 @@
+for this flavor of solution we simply do not ACK until we are done reading and we do not read unless our list of req's is empty. 
+This solution in heavy environments can starve on writing so an additional condition on the read side is added 
+ so that if q is not empty it will send a request out for the lock to prevent starvation. On shortfall of this solution is that in heavy environments reads begin to act as writes, but in light write environments this will work well
+
+this implementation assume
+--a single thread is the owner of Pi and it alone changes its state
+--FIFO
+
+---------Pi----------------
+var
+	n: int;
+	q: list of Req;
+	q_p: list of delayed_Req;
+	numAcks: int, initially 0;
+	read_lock: bool, initially 0;
+
+Upon receive REQUEST (ts) from Pj
+ 	q.insert(new Req(ts, j));
+	if read_lock then q_p.insert(new Req(ts, j));
+ 	else send ACK (logicalClock()) to Pj;
+
+Upon receive ACK (ts) from Pj
+	numAcks := numAcks + 1;
+	if (numAcks = n − 1) ∧ smallest(i) then enterCriticalSection();
+
+Upon receive RELEASE from Pj
+ 	if ∃r ∈ q : r.pid = j then q.remove(r);
+	if (numAcks = n − 1) ∧ smallest(i) then enterCriticalSection();
+
+function smallest(i)
+	return ¬q.isEmpty () ∧ (q.first().pid = i);
+
+procedure readCS(i)
+	if ¬q.isEmpty() then 
+		requestCS(i);
+		wait for permission to enter the critical section;
+		read_lock :=1;
+		enterReadOnlyCriticalSection();
+		read_lock :=0;
+		releaseCS(i);
+	else then
+		read_lock :=1;
+ 		enterReadOnlyCriticalSection();
+		read_lock :=0;
+	
+	for each r ∈ q_p:
+   		 send ACK(logicalClock()) to r.pid;
+
+		q_p := empty;
+
+procedure requestCS(i)
+	int ts := logicalClock();
+	forall j ∈ [1..n] : if j != i then send REQUEST (ts) to Pj;
+	q.insert(new Req(ts, i));
+	numAcks := 0;
+
+procedure releaseCS(i)
+	if ∃r ∈ q : r .pid = i then q.remove(r );
+	forall j ∈ [1..n] : if j != i then send RELEASE () to Pj;
